@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LANIAKEA: FINAL</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000000; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; }
+        
+        #ui {
+            position: absolute; bottom: 30px; left: 30px;
+            color: #2acaca; pointer-events: none; opacity: 1.0;
+            text-shadow: 0px 0px 8px rgba(42, 202, 202, 0.6);
+            z-index: 10; font-size: 14px;
+        }
+        .gold { color: #ffd700; font-weight: bold; }
+        .white { color: #ffffff; }
+
+        #controls {
+            position: absolute; top: 30px; right: 30px;
+            width: 200px; padding: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #333;
+            color: white; z-index: 20;
+            backdrop-filter: blur(4px);
+        }
+        .ctrl-label { font-size: 11px; color: #888; display: block; margin-bottom: 8px; letter-spacing: 1px; }
+        .btn-row { display: flex; gap: 5px; margin-bottom: 20px; }
+        .btn {
+            flex: 1; background: #111; border: 1px solid #444; color: #888;
+            padding: 6px; font-size: 10px; cursor: pointer; text-align: center;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: #2acaca; color: #fff; }
+        .btn.active { background: #2acaca; color: #000; font-weight: bold; border-color: #2acaca; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #2acaca; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        SYSTEM: <span class="gold">GPU_ACCELERATED (FINAL)</span><br>
+        PARTICLES: <span class="white">180,000 (MAX DENSITY)</span><br>
+        PHYSICS: <span class="gold">FAST-FLOW INTERFERENCE</span><br>
+        STATUS: <span class="white">OPTIMIZED</span>
+    </div>
+
+    <div id="controls">
+        <span class="ctrl-label">DATA VISUALIZATION MODE</span>
+        <div class="btn-row">
+            <div class="btn active" onclick="setScheme('uhchi', this)">UHCHI</div>
+            <div class="btn" onclick="setScheme('gold', this)">REAL</div>
+            <div class="btn" onclick="setScheme('uv', this)">UV</div>
+        </div>
+
+        <span class="ctrl-label">SIMULATION SPEED</span>
+        <input type="range" min="0" max="200" value="80" id="speedSlider">
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- GLOBAL CONFIG ---
+        const CONFIG = {
+            flowCount: 180000,      // Pushing the limit
+            starCount: 35000,       // Deep space background
+            coreCount: 8000,        // Dense Particle Black Hole
+            universeSize: 580,      // Condensed for interactions
+            speed: 0.8              // Faster base speed (was 0.5)
+        };
+
+        const SCHEMES = {
+            uhchi: { p: new THREE.Color('#2acaca'), a: new THREE.Color('#ffd700'), c: new THREE.Color('#ff3333'), bg: 0x000000, r: 0.85 },
+            gold:  { p: new THREE.Color('#ffaa33'), a: new THREE.Color('#ffffff'), c: new THREE.Color('#ff5500'), bg: 0x050505, r: 0.6 },
+            uv:    { p: new THREE.Color('#7b2cbf'), a: new THREE.Color('#00f0ff'), c: new THREE.Color('#ff00aa'), bg: 0x020005, r: 0.7 }
+        };
+        let currentScheme = SCHEMES.uhchi;
+
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(currentScheme.bg);
+        const flowFog = new THREE.FogExp2(currentScheme.bg, 0.0003); 
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 30000);
+        camera.position.set(0, 380, 900);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.2; // Slightly faster rotation
+        controls.maxDistance = 4500;
+
+        // =========================================
+        // 1. THE STARS (CUSTOM SHADER - ALWAYS VISIBLE)
+        // =========================================
+        function initStarfield() {
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(CONFIG.starCount * 3);
+            const sizes = new Float32Array(CONFIG.starCount);
+            const brightness = new Float32Array(CONFIG.starCount);
+
+            for(let i=0; i<CONFIG.starCount; i++) {
+                const r = 2800 + Math.random() * 3500; 
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                
+                pos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+                pos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+                pos[i*3+2] = r * Math.cos(phi);
+                
+                sizes[i] = 1.0 + Math.random() * 3.5; 
+                brightness[i] = 0.3 + Math.random() * 0.7;
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            geo.setAttribute('alpha', new THREE.BufferAttribute(brightness, 1));
+
+            const mat = new THREE.ShaderMaterial({
+                uniforms: {
+                    color: { value: new THREE.Color(0xffffff) },
+                    tex: { value: createTexture() }
+                },
+                vertexShader: `
+                    attribute float size;
+                    attribute float alpha;
+                    varying float vAlpha;
+                    void main() {
+                        vAlpha = alpha;
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        gl_PointSize = size; 
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 color;
+                    uniform sampler2D tex;
+                    varying float vAlpha;
+                    void main() {
+                        gl_FragColor = vec4(color, vAlpha);
+                        gl_FragColor = gl_FragColor * texture2D(tex, gl_PointCoord);
+                    }
+                `,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            scene.add(new THREE.Points(geo, mat));
+        }
+        initStarfield();
+
+        // =========================================
+        // 2. THE PARTICLE SINGULARITY (Replaces Shader Disk)
+        // =========================================
+        const coreGeo = new THREE.BufferGeometry();
+        const corePos = new Float32Array(CONFIG.coreCount * 3);
+        const coreSizes = new Float32Array(CONFIG.coreCount);
+        
+        for(let i=0; i<CONFIG.coreCount; i++) {
+            // Tight Accretion Disk Distribution
+            const r = 6 + Math.random() * 25; // Compact core
+            const angle = Math.random() * Math.PI * 2;
+            
+            // Very flat disk
+            corePos[i*3] = Math.cos(angle) * r;
+            corePos[i*3+1] = (Math.random() - 0.5) * 2; 
+            corePos[i*3+2] = Math.sin(angle) * r;
+            
+            coreSizes[i] = 1.5 + Math.random() * 3;
+        }
+        coreGeo.setAttribute('position', new THREE.BufferAttribute(corePos, 3));
+        coreGeo.setAttribute('size', new THREE.BufferAttribute(coreSizes, 1));
+        
+        const coreMat = new THREE.PointsMaterial({
+            color: currentScheme.c, size: 2, 
+            map: createTexture(), transparent: true, opacity: 0.9,
+            blending: THREE.AdditiveBlending, depthWrite: false,
+            vertexColors: false
+        });
+        const coreParticles = new THREE.Points(coreGeo, coreMat);
+        scene.add(coreParticles);
+
+        // =========================================
+        // 3. THE FLOW (180K PARTICLES)
+        // =========================================
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(CONFIG.flowCount * 3);
+        const colors = new Float32Array(CONFIG.flowCount * 3);
+        const sizes = new Float32Array(CONFIG.flowCount);
+        const types = new Float32Array(CONFIG.flowCount);
+
+        for (let i = 0; i < CONFIG.flowCount; i++) {
+            const r = CONFIG.universeSize * Math.pow(Math.random(), 0.35); 
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+
+            positions[i*3] = r * Math.sin(phi) * Math.cos(theta);
+            positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+            positions[i*3+2] = r * Math.cos(phi);
+
+            const isAccent = Math.random() > currentScheme.r;
+            types[i] = isAccent ? 1 : 0;
+            const c = isAccent ? currentScheme.a : currentScheme.p;
+            colors[i*3] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
+            
+            sizes[i] = Math.random() * 3.5;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+        const material = new THREE.PointsMaterial({
+            size: 2, vertexColors: true, map: createTexture(),
+            transparent: true, opacity: 0.85, // Slightly brighter
+            blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        scene.fog = flowFog;
+
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        function createTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+            g.addColorStop(0, 'rgba(255,255,255,1)'); 
+            g.addColorStop(0.4, 'rgba(255,255,255,0.2)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0,0,32,32);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // =========================================
+        // 4. PHYSICS LOOP (ACCELERATED)
+        // =========================================
+        let time = 0;
+        function updatePhysics() {
+            time += 0.01 * CONFIG.speed;
+
+            // Spin the Core rapidly
+            coreParticles.rotation.y -= 0.08 * CONFIG.speed;
+            const corePos = coreParticles.geometry.attributes.position.array;
+            // High-speed jitter for the "Hot" core look
+            for(let i=0; i<CONFIG.coreCount; i++) {
+                if(Math.random() > 0.95) {
+                    corePos[i*3+1] = (Math.random()-0.5) * 3 * Math.sin(time*20);
+                }
+            }
+            coreParticles.geometry.attributes.position.needsUpdate = true;
+
+            const pos = particles.geometry.attributes.position.array;
+            
+            // Tuned for Speed (Frequency matches new velocity)
+            const f1 = 0.008; 
+            const f2 = 0.02;
+
+            for(let i=0; i<CONFIG.flowCount; i++) {
+                let x = pos[i*3]; let y = pos[i*3+1]; let z = pos[i*3+2];
+                const distSq = x*x + y*y + z*z;
+                const dist = Math.sqrt(distSq);
+                
+                const s1 = time * 0.15; // Faster phase shift
+                const s2 = time * 0.3;
+
+                const n1x = Math.sin(y*f1 + s1); 
+                const n1y = Math.cos(z*f1 + s1); 
+                const n1z = Math.sin(x*f1 + s1);
+
+                const n2x = Math.sin(z*f2 - s2); 
+                const n2y = Math.sin(x*f2 - s2); 
+                const n2z = Math.cos(y*f2 - s2);
+
+                const turbX = n1x + n2x*0.5;
+                const turbY = n1y + n2y*0.5;
+                const turbZ = n1z + n2z*0.5;
+
+                const dirX = -x / (dist + 0.01);
+                const dirY = -y / (dist + 0.01);
+                const dirZ = -z / (dist + 0.01);
+
+                const speed = 0.5 + (120 / (dist+10)); 
+                const vMult = CONFIG.speed * 0.2; // 30% Boost multiplier
+
+                x += (dirX * 0.3 + turbX * 0.7) * speed * vMult;
+                y += (dirY * 0.3 + turbY * 0.7) * speed * vMult;
+                z += (dirZ * 0.3 + turbZ * 0.7) * speed * vMult;
+
+                if(distSq < 100 || distSq > CONFIG.universeSize*CONFIG.universeSize*1.5) {
+                    const r = CONFIG.universeSize * 1.1;
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos(2 * Math.random() - 1);
+                    pos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+                    pos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+                    pos[i*3+2] = r * Math.cos(phi);
+                } else {
+                    pos[i*3] = x; pos[i*3+1] = y; pos[i*3+2] = z;
+                }
+            }
+            particles.geometry.attributes.position.needsUpdate = true;
+        }
+
+        // --- INTERACTION ---
+        window.setScheme = (s, btn) => {
+            currentScheme = SCHEMES[s];
+            document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            scene.background = new THREE.Color(currentScheme.bg);
+            coreMat.color = currentScheme.c; 
+
+            const cols = particles.geometry.attributes.color.array;
+            for(let i=0; i<CONFIG.flowCount; i++) {
+                const isAccent = types[i] === 1;
+                const c = isAccent ? currentScheme.a : currentScheme.p;
+                cols[i*3] = c.r; cols[i*3+1] = c.g; cols[i*3+2] = c.b;
+            }
+            particles.geometry.attributes.color.needsUpdate = true;
+        };
+
+        const slider = document.getElementById('speedSlider');
+        slider.oninput = function() { CONFIG.speed = this.value / 100; };
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updatePhysics();
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        animate();
+    </script>
+</body>
+</html>
