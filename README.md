@@ -7,10 +7,10 @@ Renders **180,000 autonomous agents** in real-time in the browser, serving as a 
 ## Key Features
 * **Particulate Scale:** 180,000 flow particles + 35,000 background stars rendered at 60 FPS using `THREE.Points`.
 * **Emergent Physics:** No pre-defined paths. Structure arises naturally from the interaction between a radial gravity well and a Perlin-esque vector field.
-* **Volumetric Core:** A particle-based singularity (8,000 points) simulating a thermodynamic accretion disk of a spinning black hole.
+* **Volumetric Core:** A particle-based singularity (8,000 points) simulating the accretion disk of a fast spinning black hole.
 
 ## Order from Chaos
-The simulation mimics the **Zeldovich Pancake** model of cosmological structure formation. By applying low-frequency noise interference (referenced as turbulence) against a central attractor (Gravity), the system spontaneously generates "filaments" and "nodes" without explicit instruction or hardcoding of any kind. Each pass will generate an entirely new flow of particles.
+The simulation mimics the **Zeldovich Pancake** model of cosmological structure formation. By applying low-frequency noise interference (referenced as turbulence) against a central attractor (Gravity), the system spontaneously generates "filaments" and "nodes" without explicit instruction or hardcoding of any kind. Each pass will generate an entirely new flow of particles, and thus the threads.
 
 ## Stack
 * **Engine:** Three.js (WebGL 2.0)
