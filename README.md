@@ -15,7 +15,7 @@ The simulation mimics the **Zeldovich Pancake** model of cosmological structure 
 ## Stack
 * **Engine:** Three.js (WebGL 2.0)
 * **Language:** JavaScript (ES6+)
-* **Shaders:** Fragment logic for non-attenuating starfields
+* **Shaders:** Fragment logic for starfields
 
 ## To Run
 1.  Clone repo:
